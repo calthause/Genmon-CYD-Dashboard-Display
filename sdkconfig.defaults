@@ -1,0 +1,12 @@
+# Default ESP-IDF SDK Configuration Overrides
+# This file is merged with auto-generated sdkconfig.esp32dev
+
+# FreeRTOS Kernel - Arduino framework requires 1000 Hz tick rate
+CONFIG_FREERTOS_HZ=1000
+
+# Required by the Arduino ESP32 WiFiClientSecure implementation.
+CONFIG_MBEDTLS_PSK_MODES=y
+CONFIG_MBEDTLS_KEY_EXCHANGE_PSK=y
+CONFIG_MBEDTLS_KEY_EXCHANGE_DHE_PSK=y
+CONFIG_MBEDTLS_KEY_EXCHANGE_ECDHE_PSK=y
+CONFIG_MBEDTLS_KEY_EXCHANGE_RSA_PSK=y
