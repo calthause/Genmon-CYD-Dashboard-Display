@@ -46,7 +46,7 @@ pio device monitor
 
 ## Audio notes
 
-The speaker is driven by **PWM/LEDC on GPIO26** using the ESP32's `ledcWriteTone()` API. On the board used to test this template, the I2S/DAC path to GPIO26 stayed silent even though the raw DAC and PWM paths worked, so the template uses PWM for reliable UI beeps and alerts.
+The speaker is driven by **PWM/LEDC on GPIO26** using the ESP32's `ledcWriteTone()` API. This works reliably on the CYD board used to test this template.
 
 You can change the speaker pin or PWM channel in `include/config.h`:
 

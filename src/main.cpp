@@ -124,8 +124,7 @@ bool initSpeaker()
 {
   releaseSpeakerPin();
 
-  // Use PWM/LEDC on GPIO26. The I2S DAC path is silent on this board,
-  // but PWM works reliably for UI beeps and alerts.
+  // Use PWM/LEDC on GPIO26. Reliable on CYD boards where I2S/DAC is silent.
   pinMode(CYD_SPEAKER_PIN, OUTPUT);
   ledcSetup(CYD_SPEAKER_PWM_CHANNEL, 1000, 8);
   ledcAttachPin(CYD_SPEAKER_PIN, CYD_SPEAKER_PWM_CHANNEL);
@@ -142,7 +141,7 @@ void deinitSpeaker()
 }
 
 // Play a simple PWM tone on GPIO26 using LEDC.
-// Non-blocking: uses delay() internally so the tone completes.
+// Uses delay() internally so the tone completes before returning.
 void playTone(uint16_t frequencyHz, uint16_t durationMs)
 {
   if (frequencyHz == 0 || durationMs == 0 || !speakerReady)
@@ -262,7 +261,7 @@ void setup()
   display.setCursor(20, 110);
   display.print("Touch the screen to test");
 
-  // Initialize the built-in speaker (PWM/LEDC on GPIO26) and play test tones.
+  // Initialize the built-in speaker and play test tones.
   speakerReady = initSpeaker();
   if (speakerReady)
   {
