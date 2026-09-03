@@ -1,8 +1,13 @@
 # CYD ESP32 GenMon Dashboard
 
-A PlatformIO project for the **Cheap Yellow Display (CYD)** ESP32 board that displays a live generator dashboard from a [GenMon](https://github.com/jgyates/genmon) server.
+A PlatformIO project for the **Cheap Yellow Display (CYD)** ESP32 board that displays a live generator dashboard from a [GenMon](https://github.com/jgyates/genmon) server. His work on Genmon is great!! 
 
 https://youtu.be/iO4U5OVR2iI?si=pvoUVCivC8r910wh
+
+<img width="2016" height="1512" alt="IMG_4259" src="https://github.com/user-attachments/assets/12ee0e0b-daaf-4d48-a69a-f7222e3b42f9" />
+
+<img width="2016" height="1512" alt="IMG_4256" src="https://github.com/user-attachments/assets/c5fbe9c4-2c6d-464f-bbbc-3b0870a11d0c" />
+
 
 Features:
 
