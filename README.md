@@ -1,14 +1,16 @@
-# CYD ESP32 Template
+# CYD ESP32 GenMon Dashboard
 
-A minimal, reusable PlatformIO project for the **Cheap Yellow Display (CYD)** ESP32 board.
+A PlatformIO project for the **Cheap Yellow Display (CYD)** ESP32 board that displays a live generator dashboard from a [GenMon](https://github.com/jgyates/genmon) server.
 
-This template contains the CYD hardware scaffolding ready to copy into new projects:
+Features:
 
 - ILI9341 240x320 display via SPI
 - XPT2046 resistive touch controller
 - PWM backlight control
-- Built-in speaker test using PWM/LEDC on GPIO26
+- Built-in speaker using PWM/LEDC on GPIO26
 - Touch calibration saved to NVS (Preferences)
+- Connects to Wi-Fi and polls GenMon REST API
+- Displays engine state, switch state, battery voltage, output voltage/current/power, utility voltage, run hours, fuel level, outage status, and service info
 - PlatformIO + Arduino-ESP32 framework ready
 
 ## Hardware
@@ -34,6 +36,26 @@ Tested on the common **ESP32-2432S028R** "Cheap Yellow Display" variant. The pin
 └── src/
     ├── CMakeLists.txt      # IDF source glob
     └── main.cpp            # CYD init + touch/speaker demo
+```
+
+## Configure
+
+Edit `include/config.h` with your Wi-Fi credentials and GenMon server details:
+
+```cpp
+#define WIFI_SSID       "YOUR_WIFI_NAME"
+#define WIFI_PASSWORD   "YOUR_WIFI_PASSWORD"
+
+#define GENMON_HOST     "192.168.1.100"   // IP of your GenMon Raspberry Pi
+#define GENMON_PORT     8000              // GenMon default web port
+#define GENMON_POLL_MS  5000              // Refresh interval
+```
+
+If your GenMon web UI has HTTP basic authentication enabled, also set:
+
+```cpp
+#define GENMON_AUTH_USER "admin"
+#define GENMON_AUTH_PASS "your_password"
 ```
 
 ## Build & Upload
@@ -63,6 +85,7 @@ Edit `platformio.ini` under `lib_deps`:
 lib_deps =
     lovyan03/LovyanGFX @ ^1.1.16
     tzapu/WiFiManager @ ^2.0.17
+    bblanchon/ArduinoJson @ ^7.0.4
     <new-library> @ ^<version>
 ```
 
@@ -70,4 +93,7 @@ lib_deps =
 
 - The touch calibration is stored in NVS. Hold the screen at boot to recalibrate.
 - Display rotation is set to `1` (landscape). Change `display.setRotation()` if needed.
-- Replace the contents of `loop()` with your application logic; keep the LGFX class and audio helpers for the hardware setup.
+- The dashboard polls GenMon every `GENMON_POLL_MS` milliseconds.
+- Touch the screen to force an immediate refresh.
+- Engine-state colors: green = running/exercising, cyan = ready/auto/off, orange = starting/cooling, red = alarm/fault.
+- The dashboard uses GenMon's `/cmd/status_json`, `/cmd/maint_json`, and `/cmd/outage_json` endpoints.

@@ -1,105 +1,12 @@
 #include <Arduino.h>
 #include <Preferences.h>
-#define LGFX_USE_V1
-#include <LovyanGFX.hpp>
+#include "lgfx_cyd.h"
 #include "config.h"
+#include "genmon_dashboard.h"
 #include <math.h>
 
-// CYD28 Display configuration - ILI9341 with SPI
-class LGFX : public lgfx::LGFX_Device
-{
-  lgfx::Panel_ILI9341  _panel_instance;
-  lgfx::Bus_SPI        _bus_instance;
-  lgfx::Light_PWM      _light_instance;
-  lgfx::Touch_XPT2046  _touch_instance;
-
-public:
-  LGFX(void)
-  {
-    {   // SPI bus - display (HSPI)
-      auto cfg = _bus_instance.config();
-      cfg.spi_host    = HSPI_HOST;
-      cfg.spi_mode    = 0;
-      cfg.freq_write  = 55000000;
-      cfg.freq_read   = 20000000;
-      cfg.spi_3wire   = false;
-      cfg.use_lock    = true;
-      cfg.dma_channel = 1;
-
-      cfg.pin_sclk    = 14;
-      cfg.pin_mosi    = 13;
-      cfg.pin_miso    = 12;
-      cfg.pin_dc      = 2;
-
-      _bus_instance.config(cfg);
-      _panel_instance.setBus(&_bus_instance);
-    }
-
-    {   // ILI9341 panel
-      auto cfg = _panel_instance.config();
-
-      cfg.pin_cs           = 15;
-      cfg.pin_rst          = -1;
-      cfg.pin_busy         = -1;
-
-      cfg.memory_width     = 320;
-      cfg.memory_height    = 240;
-      cfg.panel_width      = 320;
-      cfg.panel_height     = 240;
-
-      cfg.offset_x         = 0;
-      cfg.offset_y         = 0;
-      cfg.offset_rotation  = 7;
-
-      cfg.dummy_read_pixel = 8;
-      cfg.dummy_read_bits  = 1;
-      cfg.readable         = true;
-      cfg.invert           = false;
-      cfg.rgb_order        = true;
-      cfg.dlen_16bit       = false;
-      cfg.bus_shared       = true;
-
-      _panel_instance.config(cfg);
-    }
-
-    {   // Backlight PWM
-      auto cfg = _light_instance.config();
-      cfg.pin_bl      = 21;
-      cfg.invert      = false;
-      cfg.freq        = 44100;
-      cfg.pwm_channel = 7;
-
-      _light_instance.config(cfg);
-      _panel_instance.setLight(&_light_instance);
-    }
-
-    {   // Touch - XPT2046
-      auto cfg = _touch_instance.config();
-
-      cfg.x_min           = 300;
-      cfg.x_max           = 3900;
-      cfg.y_min           = 200;
-      cfg.y_max           = 3700;
-
-      cfg.pin_int         = 36;
-      cfg.bus_shared      = true;
-      cfg.offset_rotation = 3;
-
-      cfg.spi_host        = -1;
-      cfg.freq            = 2500000;
-
-      cfg.pin_sclk        = 25;
-      cfg.pin_mosi        = 32;
-      cfg.pin_miso        = 39;
-      cfg.pin_cs          = 33;
-
-      _touch_instance.config(cfg);
-      _panel_instance.setTouch(&_touch_instance);
-    }
-
-    setPanel(&_panel_instance);
-  }
-};
+// Expose the runtime config so main.cpp can reference it if needed.
+extern const DashboardConfig& dashboardGetConfig();
 
 static LGFX display;
 
@@ -226,11 +133,17 @@ void calibrateTouchAtBoot()
   display.fillScreen(COLOR_BG);
 }
 
+static GenMonData genmonData;
+static unsigned long lastPollMs = 0;
+static unsigned long lastPageSwitchMs = 0;
+static uint8_t currentPage = 0;
+static const unsigned long PAGE_SWITCH_MS = 8000;
+
 void setup()
 {
   Serial.begin(115200);
   delay(500);
-  Serial.println("CYD template starting...");
+  Serial.println("CYD GenMon dashboard starting...");
 
   display.init();
   display.setColorDepth(16);
@@ -245,71 +158,81 @@ void setup()
     loadTouchCalibration();
   }
 
-  display.fillScreen(COLOR_BG);
-  display.fillRect(0, 0, display.width(), 30, COLOR_HEADER);
-  display.setTextColor(COLOR_WHITE, COLOR_HEADER);
-  display.setTextSize(1);
-  display.setCursor(10, 10);
-  display.print("CYD Template");
-
-  display.setTextColor(COLOR_WHITE, COLOR_BG);
-  display.setTextSize(2);
-  display.setCursor(20, 70);
-  display.print("CYD Ready");
-
-  display.setTextSize(1);
-  display.setCursor(20, 110);
-  display.print("Touch the screen to test");
-
-  // Initialize the built-in speaker and play test tones.
+  // Brief speaker chirp to confirm audio hardware.
   speakerReady = initSpeaker();
   if (speakerReady)
   {
-    display.setCursor(20, 130);
-    display.setTextColor(COLOR_WHITE, COLOR_BG);
-    display.print("Speaker test...");
-
-    playTone(880, 500);
-    delay(200);
-    playTone(1175, 500);
-
-    display.fillRect(20, 130, 240, 20, COLOR_BG);
-    display.setCursor(20, 130);
-    display.print("Speaker OK  (touch to beep)");
-    Serial.println("Speaker test complete");
+    playTone(880, 150);
+    Serial.println("Speaker OK");
   }
   else
   {
-    display.setCursor(20, 130);
-    display.setTextColor(COLOR_WHITE, COLOR_BG);
-    display.print("Speaker init failed");
     Serial.println("Speaker init failed");
   }
 
-  Serial.println("CYD template initialized");
+  // Connect to Wi-Fi and show progress on the display.
+  dashboardConnectWiFi(&display);
+
+  // Initial GenMon fetch and render.
+  dashboardFetchData(genmonData);
+  dashboardRenderPage(&display, genmonData, currentPage);
+
+  Serial.println("CYD GenMon dashboard initialized");
 }
 
 void loop()
 {
+  unsigned long now = millis();
+  bool forceRefresh = false;
+  bool switchPage = false;
+
+  // Touch anywhere to force an immediate refresh and page switch.
   uint16_t touchX = 0;
   uint16_t touchY = 0;
-
   if (display.getTouch(&touchX, &touchY))
   {
     Serial.printf("Touch: X=%d Y=%d\n", touchX, touchY);
+    forceRefresh = true;
+    switchPage = true;
 
-    display.fillRect(20, 140, 280, 40, COLOR_BG);
-    display.setTextColor(COLOR_CYAN, COLOR_BG);
-    display.setCursor(20, 150);
-    display.printf("X=%d  Y=%d", touchX, touchY);
-
-    // Let you test the speaker repeatedly by touching the screen.
     if (speakerReady)
     {
-      playTone(1000, 150);
+      playTone(1000, 80);
     }
 
-    delay(100);
+    // Simple debounce.
+    delay(150);
+  }
+
+  if (forceRefresh || (now - lastPollMs >= GENMON_POLL_MS))
+  {
+    lastPollMs = now;
+
+    Serial.println("Polling GenMon...");
+    bool ok = dashboardFetchData(genmonData);
+    if (ok)
+    {
+      Serial.println("GenMon poll OK");
+    }
+    else
+    {
+      Serial.print("GenMon poll failed: ");
+      Serial.println(genmonData.error);
+    }
+  }
+
+  if (switchPage || (now - lastPageSwitchMs >= PAGE_SWITCH_MS))
+  {
+    lastPageSwitchMs = now;
+    if (switchPage || currentPage == 0)
+    {
+      currentPage = (currentPage + 1) % 2;
+    }
+    else
+    {
+      currentPage = 0;
+    }
+    dashboardRenderPage(&display, genmonData, currentPage);
   }
 
   delay(50);
