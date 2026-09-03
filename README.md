@@ -2,6 +2,8 @@
 
 A PlatformIO project for the **Cheap Yellow Display (CYD)** ESP32 board that displays a live generator dashboard from a [GenMon](https://github.com/jgyates/genmon) server.
 
+https://youtu.be/iO4U5OVR2iI?si=pvoUVCivC8r910wh
+
 Features:
 
 - ILI9341 240x320 display via SPI
