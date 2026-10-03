@@ -1,0 +1,53 @@
+name: Build firmware and update web flasher
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '.github/**'
+      - 'README.md'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.platformio/.cache
+          key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      - name: Build firmware
+        run: pio run
+
+      - name: Merge into single flash image
+        run: |
+          ENV_DIR=.pio/build/esp32dev
+          esptool_dir=$(python -c "import glob; print(sorted(glob.glob('$HOME/.platformio/packages/tool-esptoolpy*'))[-1])")
+          python "$esptool_dir/esptool.py" --chip esp32 merge_bin \
+            -o docs/firmware.bin \
+            --flash_mode dio --flash_freq 40m --flash_size 4MB \
+            0x1000 "$ENV_DIR/bootloader.bin" \
+            0x8000 "$ENV_DIR/partitions.bin" \
+            0x10000 "$ENV_DIR/firmware.bin"
+
+      - name: Commit updated flasher firmware
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update flasher firmware [skip ci]"
+          file_pattern: docs/firmware.bin
